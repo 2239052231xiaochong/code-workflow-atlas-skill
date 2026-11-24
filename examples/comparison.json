@@ -1,0 +1,218 @@
+{
+  "version": 1,
+  "title": "Branch and comparison browser fixture",
+  "language": "en",
+  "baseline": "synthetic fixture",
+  "comparison": {
+    "title": "Reference",
+    "baseline": "synthetic reference"
+  },
+  "phases": [
+    {
+      "id": "p1",
+      "nodes": [
+        "read"
+      ],
+      "compare": [
+        "ref-read"
+      ]
+    },
+    {
+      "id": "p2",
+      "nodes": [
+        "reuse",
+        "generate"
+      ],
+      "compare": [
+        "ref-generate"
+      ]
+    },
+    {
+      "id": "p3",
+      "nodes": [
+        "finish"
+      ],
+      "compare": [
+        "ref-finish"
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "id": "read",
+      "title": "read",
+      "summary": "synthetic only",
+      "kind": "program",
+      "sourceIds": [
+        "src"
+      ],
+      "promptIds": [],
+      "comparison": {
+        "same": "Same input",
+        "different": "Different branch",
+        "possibleImpact": "Hypothesis only",
+        "evidence": "Synthetic fixture"
+      }
+    },
+    {
+      "id": "reuse",
+      "title": "reuse",
+      "summary": "synthetic only",
+      "kind": "program",
+      "sourceIds": [
+        "src"
+      ],
+      "promptIds": [],
+      "comparison": {
+        "same": "Same input",
+        "different": "Different branch",
+        "possibleImpact": "Hypothesis only",
+        "evidence": "Synthetic fixture"
+      }
+    },
+    {
+      "id": "generate",
+      "title": "generate",
+      "summary": "synthetic only",
+      "kind": "program",
+      "sourceIds": [
+        "src"
+      ],
+      "promptIds": [
+        "prompt"
+      ],
+      "comparison": {
+        "same": "Same input",
+        "different": "Different branch",
+        "possibleImpact": "Hypothesis only",
+        "evidence": "Synthetic fixture"
+      }
+    },
+    {
+      "id": "finish",
+      "title": "finish",
+      "summary": "synthetic only",
+      "kind": "program",
+      "sourceIds": [
+        "src"
+      ],
+      "promptIds": [],
+      "comparison": {
+        "same": "Same input",
+        "different": "Different branch",
+        "possibleImpact": "Hypothesis only",
+        "evidence": "Synthetic fixture"
+      }
+    },
+    {
+      "id": "ref-read",
+      "title": "ref-read",
+      "summary": "synthetic only",
+      "kind": "program",
+      "sourceIds": [
+        "src"
+      ],
+      "promptIds": [],
+      "comparison": {
+        "same": "Same input",
+        "different": "Different branch",
+        "possibleImpact": "Hypothesis only",
+        "evidence": "Synthetic fixture"
+      }
+    },
+    {
+      "id": "ref-generate",
+      "title": "ref-generate",
+      "summary": "synthetic only",
+      "kind": "program",
+      "sourceIds": [
+        "src"
+      ],
+      "promptIds": [],
+      "comparison": {
+        "same": "Same input",
+        "different": "Different branch",
+        "possibleImpact": "Hypothesis only",
+        "evidence": "Synthetic fixture"
+      }
+    },
+    {
+      "id": "ref-finish",
+      "title": "ref-finish",
+      "summary": "synthetic only",
+      "kind": "program",
+      "sourceIds": [
+        "src"
+      ],
+      "promptIds": [],
+      "comparison": {
+        "same": "Same input",
+        "different": "Different branch",
+        "possibleImpact": "Hypothesis only",
+        "evidence": "Synthetic fixture"
+      }
+    }
+  ],
+  "sources": [
+    {
+      "id": "src",
+      "text": "first line\nsecond line",
+      "annotations": [
+        {
+          "line": 1,
+          "text": "A real annotation"
+        }
+      ],
+      "start": 1
+    }
+  ],
+  "prompts": [
+    {
+      "id": "prompt",
+      "provenance": "illustrative",
+      "system": "Use {{snippet:fmt}}",
+      "user": "Topic {{topic}}",
+      "parameters": {
+        "topic": "fixture"
+      },
+      "assembly": {
+        "syntax": "mustache-basic",
+        "snippets": {
+          "fmt": "JSON"
+        },
+        "label": "Example, no model request"
+      },
+      "outputExample": [
+        {
+          "text": "example"
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "read",
+      "to": "reuse"
+    },
+    {
+      "from": "read",
+      "to": "generate"
+    },
+    {
+      "from": "reuse",
+      "to": "finish"
+    },
+    {
+      "from": "generate",
+      "to": "finish"
+    },
+    {
+      "from": "ref-read",
+      "to": "ref-generate"
+    },
+    {
+      "from": "ref-generate",
+      "to": "ref-finish"
+    }
+  ]
+}

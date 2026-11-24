@@ -1,0 +1,513 @@
+{
+  "version": 1,
+  "language": "zh-CN",
+  "title": "一份摘要报告是怎样产生的？",
+  "subtitle": "读图顺序：清洗材料 → 查缓存 → 复用或生成 → 返回报告。点击节点查看处理原理、中文逐行注释和提示词来源。",
+  "baseline": "示例基线：examples/report_pipeline.py 工作副本（2026-11-24）；已记录源码摘录指纹；没有外部模型调用。",
+  "phases": [
+    {
+      "id": "input",
+      "label": "清洗材料",
+      "nodes": [
+        "read"
+      ]
+    },
+    {
+      "id": "lookup",
+      "label": "验证与查缓存",
+      "nodes": [
+        "cache",
+        "empty"
+      ]
+    },
+    {
+      "id": "branch",
+      "label": "命中或生成",
+      "nodes": [
+        "reuse",
+        "generate"
+      ]
+    },
+    {
+      "id": "finish",
+      "label": "返回或报错",
+      "nodes": [
+        "report",
+        "invalid"
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "id": "read",
+      "title": "清洗材料",
+      "kind": "程序",
+      "summary": "run() 接收主题、材料和缓存；去掉材料首尾空白。",
+      "inputs": [
+        "调用方传入 topic、material、cache；文件本身没有 CLI 或顶层 run() 调用。"
+      ],
+      "steps": [
+        {
+          "title": "入口是 run()，由外部调用",
+          "detail": "run(topic, material, cache) 首先调用 read_material(material)。这三个参数的创建方式不在本示例中。"
+        },
+        {
+          "title": "只清理材料的首尾空白",
+          "detail": "text.strip() 得到 cleaned；没有读取文件、网页、切分文档或清洗主题。"
+        },
+        {
+          "title": "分流：空材料报错，其余继续",
+          "detail": "cleaned 为空就抛出 ValueError(\"Material is empty\")；不会进入缓存查询。"
+        }
+      ],
+      "outputs": [
+        "非空 cleaned → 查缓存；空 cleaned → 空材料异常。"
+      ],
+      "sourceIds": [
+        "entry",
+        "clean",
+        "context"
+      ]
+    },
+    {
+      "id": "cache",
+      "title": "按主题和材料查缓存",
+      "kind": "程序",
+      "summary": "缓存键是 (topic, cleaned)，命中与未命中走两条路径。",
+      "inputs": [
+        "topic 原值、去掉首尾空白的 cleaned、调用方传入的 cache。"
+      ],
+      "steps": [
+        {
+          "title": "构造元组键",
+          "detail": "key = (topic, cleaned)。同主题且清洗后的材料相同，才会视为同一条缓存。"
+        },
+        {
+          "title": "判断成员关系",
+          "detail": "if key in cache 仅查键是否存在，没有过期时间或版本判断。"
+        },
+        {
+          "title": "两条路径最终都调用 make_report()",
+          "detail": "命中读取已有 summary；未命中才拼提示词、获取固定摘要，再把摘要写入 cache。"
+        }
+      ],
+      "outputs": [
+        "命中 → 复用缓存；未命中 → 本地摘要流程。"
+      ],
+      "sourceIds": [
+        "entry"
+      ]
+    },
+    {
+      "id": "empty",
+      "title": "空材料：立即报错",
+      "kind": "异常",
+      "summary": "抛出 Material is empty；本次调用没有报告。",
+      "inputs": [
+        "strip() 之后为空的材料，例如仅包含空格或换行。"
+      ],
+      "steps": [
+        {
+          "title": "抛出 ValueError",
+          "detail": "read_material() 第 11 行直接抛出异常。run() 没有 try/except，因此异常交给调用方。"
+        },
+        {
+          "title": "提前终止后续处理",
+          "detail": "不会构造缓存键，不会拼提示词、调用替身或写入缓存，也不会调用 make_report()。"
+        }
+      ],
+      "outputs": [
+        "ValueError(\"Material is empty\") → 调用方；没有返回值或报告。"
+      ],
+      "sourceIds": [
+        "clean",
+        "entry"
+      ]
+    },
+    {
+      "id": "reuse",
+      "title": "命中：直接复用摘要",
+      "kind": "程序",
+      "summary": "读出 cache[key]，跳过提示词、替身、解析与校验。",
+      "inputs": [
+        "缓存中已有的 cache[key]。"
+      ],
+      "steps": [
+        {
+          "title": "取已有值",
+          "detail": "summary = cache[key]。这条路径没有验证摘要是否为非空字符串；缓存的质量由调用方负责。"
+        },
+        {
+          "title": "直接返回报告",
+          "detail": "return make_report(summary, reused=True) 提前结束 run()；不会执行第 43–45 行的新生成分支。"
+        }
+      ],
+      "outputs": [
+        "summary 原值与 reused=True → make_report()。"
+      ],
+      "sourceIds": [
+        "entry",
+        "report-source"
+      ]
+    },
+    {
+      "id": "generate",
+      "title": "未命中：拼接提示词并生成示例摘要",
+      "kind": "本地替身",
+      "summary": "常量模板 → 两次替换 → 固定 JSON → 解析校验 → 写缓存。",
+      "inputs": [
+        "topic 原值、cleaned、模块内的 SYSTEM_TEMPLATE 与 USER_TEMPLATE。"
+      ],
+      "steps": [
+        {
+          "title": "从仓库常量拼出提示词",
+          "detail": "build_prompt() 返回 SYSTEM_TEMPLATE 原文，并依次用 str.replace 替换 USER_TEMPLATE 中的 {{topic}}、{{material}}。没有另一模型编写提示词，也没有片段、条件块或追加规则。"
+        },
+        {
+          "title": "调用本地固定替身",
+          "detail": "demonstration_model(system, user) 接收两段文本，但函数体不使用它们的内容；始终用 json.dumps 返回固定英文 summary。它不是实际 LLM 请求，也不根据材料生成新摘要。"
+        },
+        {
+          "title": "把字符串解析为对象并校验",
+          "detail": "json.loads(reply) 得到字典。随后要求 summary 为字符串且 strip() 后非空；失败会抛出 Invalid summary。固定替身正常返回时满足校验，防御分支不会触发。"
+        },
+        {
+          "title": "通过后写入缓存",
+          "detail": "返回 result[\"summary\"] 原值，run() 再执行 cache[key] = summary，最后带 reused=False 组装报告。校验只检查非空，不会去掉摘要首尾空白。"
+        }
+      ],
+      "outputs": [
+        "有效 summary 写入 cache[key]，与 reused=False → 报告；校验失败 → 异常。"
+      ],
+      "sourceIds": [
+        "templates",
+        "prompt-build",
+        "stand-in",
+        "generation",
+        "entry"
+      ],
+      "promptIds": [
+        "summary-prompt"
+      ]
+    },
+    {
+      "id": "report",
+      "title": "组装并返回报告字典",
+      "kind": "程序",
+      "summary": "共享终点：summary、reused、format；没有落盘或导出。",
+      "inputs": [
+        "命中：已有 summary 与 reused=True；未命中且校验通过：新 summary 与 reused=False。"
+      ],
+      "steps": [
+        {
+          "title": "组装三个字段",
+          "detail": "make_report() 返回 Python 字典 {\"summary\": summary, \"reused\": reused, \"format\": \"json-report\"}。format 只是固定标签。"
+        },
+        {
+          "title": "返回给调用方",
+          "detail": "run() 返回该字典。这里没有把报告序列化成 JSON 文件，没有 TTS、HTML 渲染或视频导出。"
+        },
+        {
+          "title": "区别状态副作用",
+          "detail": "未命中分支在返回前把摘要写入调用方的 cache；命中分支读取已有值并提前返回。"
+        }
+      ],
+      "outputs": [
+        "报告 Python dict → 调用方；未命中时 cache 还多出一条摘要。"
+      ],
+      "sourceIds": [
+        "report-source",
+        "entry"
+      ]
+    },
+    {
+      "id": "invalid",
+      "title": "摘要无效：防御报错",
+      "kind": "异常",
+      "summary": "固定替身正常不会走到这里；失败时不写缓存或返回报告。",
+      "inputs": [
+        "json.loads 得到的对象中，summary 不是字符串或仅含空白。"
+      ],
+      "steps": [
+        {
+          "title": "按条件抛出异常",
+          "detail": "not isinstance(result.get(\"summary\"), str) 或 not result[\"summary\"].strip() 成立，就抛出 ValueError(\"Invalid summary\")。这是代码中的防御检查。"
+        },
+        {
+          "title": "当前固定返回下无法正常触发",
+          "detail": "本示例替身始终返回含非空 summary 的合法 JSON。只有替换、修改或测试注入异常回复，才会走这条校验失败分支。"
+        },
+        {
+          "title": "异常交给调用方",
+          "detail": "run() 没有捕获异常；generate_summary() 未成功返回，因此 cache[key] = summary 与 make_report() 都不会执行。json.loads 自身也会对无效 JSON 抛出解析异常，但当前固定回复不会引发它。"
+        }
+      ],
+      "outputs": [
+        "ValueError(\"Invalid summary\") → 调用方；无新增缓存、无报告。"
+      ],
+      "sourceIds": [
+        "generation",
+        "stand-in",
+        "entry"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "read",
+      "to": "cache",
+      "label": "材料非空"
+    },
+    {
+      "from": "read",
+      "to": "empty",
+      "label": "去空白后为空"
+    },
+    {
+      "from": "cache",
+      "to": "reuse",
+      "label": "键存在"
+    },
+    {
+      "from": "cache",
+      "to": "generate",
+      "label": "键不存在"
+    },
+    {
+      "from": "reuse",
+      "to": "report",
+      "label": "reused=True"
+    },
+    {
+      "from": "generate",
+      "to": "report",
+      "label": "校验通过，写缓存"
+    },
+    {
+      "from": "generate",
+      "to": "invalid",
+      "label": "校验失败（防御）"
+    }
+  ],
+  "sources": [
+    {
+      "id": "context",
+      "path": "examples/report_pipeline.py",
+      "start": 1,
+      "end": 2,
+      "title": "示例边界：仅本地确定性演示",
+      "annotations": [
+        {
+          "line": 1,
+          "text": "文件声明：合成示例，无网络、真实 LLM、TTS 或私有项目数据。"
+        }
+      ],
+      "url": "https://github.com/2239052231xiaochong/code-workflow-atlas-skill/blob/v0.1.0/examples/report_pipeline.py#L1"
+    },
+    {
+      "id": "clean",
+      "path": "examples/report_pipeline.py",
+      "start": 8,
+      "end": 12,
+      "title": "材料清洗与空输入异常 · 8–12 行",
+      "annotations": [
+        {
+          "line": 8,
+          "text": "接收材料字符串；函数不负责加载文件。"
+        },
+        {
+          "line": 9,
+          "text": "只移除首尾空白，不修改中间内容。"
+        },
+        {
+          "line": 10,
+          "text": "空字符串进入报错分支。"
+        },
+        {
+          "line": 11,
+          "text": "抛出异常后，不会继续查缓存。"
+        },
+        {
+          "line": 12,
+          "text": "将 cleaned 交回 run()。"
+        }
+      ],
+      "url": "https://github.com/2239052231xiaochong/code-workflow-atlas-skill/blob/v0.1.0/examples/report_pipeline.py#L8"
+    },
+    {
+      "id": "templates",
+      "path": "examples/report_pipeline.py",
+      "start": 4,
+      "end": 5,
+      "title": "提示词真实来源：模块常量 · 4–5 行",
+      "annotations": [
+        {
+          "line": 4,
+          "text": "SYSTEM 是代码中写死的英文模板，要求返回含 summary 的 JSON。"
+        },
+        {
+          "line": 5,
+          "text": "USER 只有 topic 与 material 两个占位符；\\n 表示实际换行。"
+        }
+      ],
+      "url": "https://github.com/2239052231xiaochong/code-workflow-atlas-skill/blob/v0.1.0/examples/report_pipeline.py#L4"
+    },
+    {
+      "id": "prompt-build",
+      "path": "examples/report_pipeline.py",
+      "start": 15,
+      "end": 16,
+      "title": "提示词拼接：两次字符串替换 · 15–16 行",
+      "annotations": [
+        {
+          "line": 15,
+          "text": "调用方传入主题与清洗后的材料。"
+        },
+        {
+          "line": 16,
+          "text": "先替换 {{topic}} 再替换 {{material}}；这是 str.replace，不是模板框架。SYSTEM 原样返回。主题若包含 {{material}}，第二次替换还会替换该字面量；页面不伪造通用模板引擎的精确拼接。"
+        }
+      ],
+      "url": "https://github.com/2239052231xiaochong/code-workflow-atlas-skill/blob/v0.1.0/examples/report_pipeline.py#L15"
+    },
+    {
+      "id": "stand-in",
+      "path": "examples/report_pipeline.py",
+      "start": 19,
+      "end": 21,
+      "title": "本地替身：固定返回值 · 19–21 行",
+      "annotations": [
+        {
+          "line": 19,
+          "text": "虽然参数名叫 system、user，函数体实际没有使用参数内容。"
+        },
+        {
+          "line": 20,
+          "text": "原注释明确：确定性替身，不是外部模型调用。"
+        },
+        {
+          "line": 21,
+          "text": "将固定 summary 字典转成 JSON 字符串；材料和主题不会改变这段摘要。"
+        }
+      ],
+      "url": "https://github.com/2239052231xiaochong/code-workflow-atlas-skill/blob/v0.1.0/examples/report_pipeline.py#L19"
+    },
+    {
+      "id": "generation",
+      "path": "examples/report_pipeline.py",
+      "start": 24,
+      "end": 30,
+      "title": "生成编排、JSON 解析与校验 · 24–30 行",
+      "annotations": [
+        {
+          "line": 25,
+          "text": "获取来自模块常量与输入参数的两段提示词。"
+        },
+        {
+          "line": 26,
+          "text": "执行本地替身函数，没有网络请求。"
+        },
+        {
+          "line": 27,
+          "text": "确定性 JSON 解析：reply 字符串 → result 字典。"
+        },
+        {
+          "line": 28,
+          "text": "检查 summary 的类型与非空性；strip() 只用于判断，不修改摘要。"
+        },
+        {
+          "line": 29,
+          "text": "校验失败时直接抛出异常；当前固定正常回复不会触发。"
+        },
+        {
+          "line": 30,
+          "text": "成功时返回 summary 原字符串。"
+        }
+      ],
+      "url": "https://github.com/2239052231xiaochong/code-workflow-atlas-skill/blob/v0.1.0/examples/report_pipeline.py#L24"
+    },
+    {
+      "id": "report-source",
+      "path": "examples/report_pipeline.py",
+      "start": 33,
+      "end": 34,
+      "title": "报告输出：仅创建 Python 字典 · 33–34 行",
+      "annotations": [
+        {
+          "line": 34,
+          "text": "reused 告知本次是否命中缓存；format 是标签，不代表已写出文件或调用导出器。"
+        }
+      ],
+      "url": "https://github.com/2239052231xiaochong/code-workflow-atlas-skill/blob/v0.1.0/examples/report_pipeline.py#L33"
+    },
+    {
+      "id": "entry",
+      "path": "examples/report_pipeline.py",
+      "start": 37,
+      "end": 45,
+      "title": "入口 run()：缓存分支和早返回 · 37–45 行",
+      "annotations": [
+        {
+          "line": 37,
+          "text": "需要外部调用 run()；本文件没有顶层启动语句。"
+        },
+        {
+          "line": 38,
+          "text": "清洗失败会抛出异常，后面的代码不执行。"
+        },
+        {
+          "line": 39,
+          "text": "缓存键由原 topic 和 cleaned 组成；缓存内容由调用方传入。"
+        },
+        {
+          "line": 40,
+          "text": "只判断键是否存在，未验证缓存值。"
+        },
+        {
+          "line": 41,
+          "text": "命中后直接读摘要。"
+        },
+        {
+          "line": 42,
+          "text": "早返回：reused=True；提示词与生成流程全部跳过。"
+        },
+        {
+          "line": 43,
+          "text": "仅未命中时执行本地摘要流程；发生异常则不继续写缓存。"
+        },
+        {
+          "line": 44,
+          "text": "把有效新摘要写回同一个 cache。"
+        },
+        {
+          "line": 45,
+          "text": "未命中完成：reused=False。两条成功路径共享 make_report()。"
+        }
+      ],
+      "url": "https://github.com/2239052231xiaochong/code-workflow-atlas-skill/blob/v0.1.0/examples/report_pipeline.py#L37"
+    }
+  ],
+  "prompts": [
+    {
+      "id": "summary-prompt",
+      "title": "摘要提示词：仓库常量 + 运行输入",
+      "provenance": "repository-template",
+      "sourceIds": [
+        "templates",
+        "prompt-build",
+        "generation",
+        "stand-in"
+      ],
+      "system": "Explain only the provided material. Return JSON with a summary field.",
+      "user": "Topic: {{topic}}\nMaterial: {{material}}",
+      "parameters": {
+        "topic": "示例主题：报告流程",
+        "material": "示例材料：这是一段清洗后的材料。",
+        "说明": "仅用于解释字段，不是运行抓包。实际由 run() 的调用方传入；material 在拼词前已 strip()。"
+      },
+      "outputExample": {
+        "summary": "A demonstration summary of the supplied material."
+      }
+    }
+  ]
+}

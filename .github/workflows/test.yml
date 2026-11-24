@@ -1,0 +1,25 @@
+name: Verify skill
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: python -m unittest discover -s tests -v
+      - run: python skills/code-workflow-atlas/scripts/build_atlas.py --manifest examples/workflow.json --repo . --output artifacts/workflow.html
+      - run: python skills/code-workflow-atlas/scripts/build_atlas.py --manifest examples/comparison.json --repo . --output artifacts/comparison.html
+      - run: npm install --ignore-scripts
+      - run: npx playwright install --with-deps chromium
+      - run: node skills/code-workflow-atlas/scripts/smoke_atlas.mjs artifacts/workflow.html artifacts/browser
+      - run: node skills/code-workflow-atlas/scripts/smoke_atlas.mjs artifacts/comparison.html artifacts/comparison-browser
+      - run: python skills/code-workflow-atlas/scripts/package_skill.py --output dist/code-workflow-atlas-v0.1.0.zip

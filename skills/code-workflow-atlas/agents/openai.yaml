@@ -1,0 +1,4 @@
+interface:
+  display_name: "代码工作流图解"
+  short_description: "把代码和提示词整理成可点击流图，展开中文注释并核对实现依据"
+  default_prompt: "使用 $code-workflow-atlas 把这个项目整理成可点击的 HTML 工作流，并展示提示词来源与中文代码注释。"
